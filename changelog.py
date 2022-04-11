@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
 import click
+import configparser
 from github import Github
 from datetime import timedelta
 
+# Read config
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 @click.command()
 @click.option('--token', help='Github Token.', )
@@ -11,15 +15,18 @@ def generate_change_logs(token):
     """."""
     
     # Settings
-    # TODO: update settings, branches etc
     g = Github(token)
-    repo = g.get_repo("rero/rero-ils")
-    staging = repo.get_branch('staging')
-    main = repo.get_branch('master')
+    repo_name = f"{config['conf']['user']}/{config['conf']['repo']}"
+    print(repo_name)
+    repo = g.get_repo(repo_name)
+    new_release = repo.get_branch(config['conf']['new_release_branch'])
+    latest_release = repo.get_branch(config['conf']['latest_release_branch'])
+    ignore_labels = config['conf']['ignore_labels'].split(",")
+    print(ignore_labels)
 
-    from_date = main.commit.commit.committer.date
-    to_date = staging.commit.commit.committer.date
-    ignore_labels = ["stale", "duplicate", "wontfix", "translations", "task"]
+    from_date = latest_release.commit.commit.committer.date
+    to_date = new_release.commit.commit.committer.date
+    
     all_closed_issues = repo.get_issues(state='closed', sort='updated')
     click.secho('Fetching all closed issues and PRs...')
 
@@ -37,7 +44,7 @@ def generate_change_logs(token):
     for issue in issues:
         if issue.pull_request:
             pr = repo.get_pull(issue.number)
-            if pr.merged and pr.base.label == "rero:staging":
+            if pr.merged and pr.base.label == config['conf']['user'] + config['conf']['new_release_branch']:
                 out_prs.append(issue)
         else:
             ignore_issue = 0
@@ -64,11 +71,11 @@ def generate_change_logs(token):
 
 # TODO: Structure from labels
 
-    print("# Issues \n")
+    print("\n # Issues")
     for issue in out_issues:
         print(f'* {issue.title} [\#{issue.number}]({issue.html_url})')
 
-    print("# Pull Requests \n")
+    print("\n # Pull Requests")
     for issue in final_prs:
         print(f'* {issue.title} [\#{issue.number}]({issue.html_url}) [{issue.user.login}]({issue.user.html_url})')
 
