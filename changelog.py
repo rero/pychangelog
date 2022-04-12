@@ -17,12 +17,10 @@ def generate_change_logs(token):
     # Settings
     g = Github(token)
     repo_name = f"{config['conf']['user']}/{config['conf']['repo']}"
-    print(repo_name)
     repo = g.get_repo(repo_name)
     new_release = repo.get_branch(config['conf']['new_release_branch'])
     latest_release = repo.get_branch(config['conf']['latest_release_branch'])
     ignore_labels = config['conf']['ignore_labels'].split(",")
-    print(ignore_labels)
 
     from_date = latest_release.commit.commit.committer.date
     to_date = new_release.commit.commit.committer.date
@@ -44,7 +42,7 @@ def generate_change_logs(token):
     for issue in issues:
         if issue.pull_request:
             pr = repo.get_pull(issue.number)
-            if pr.merged and pr.base.label == config['conf']['user'] + config['conf']['new_release_branch']:
+            if pr.merged and (pr.base.label == config['conf']['user'] + ':' + config['conf']['new_release_branch']):
                 out_prs.append(issue)
         else:
             ignore_issue = 0
@@ -69,15 +67,9 @@ def generate_change_logs(token):
         if not linked_pr:
             final_prs.append(pr)
 
-# TODO: Structure from labels
+    final_issues = final_prs + out_issues
 
-    print("\n # Issues")
-    for issue in out_issues:
-        print(f'* {issue.title} [\#{issue.number}]({issue.html_url})')
-
-    print("\n # Pull Requests")
-    for issue in final_prs:
-        print(f'* {issue.title} [\#{issue.number}]({issue.html_url}) [{issue.user.login}]({issue.user.html_url})')
+    export_file(final_issues)
 
 
 def get_all(results):
@@ -88,6 +80,63 @@ def get_all(results):
             yield r
         n += 1
         current_page = results.get_page(n)
+
+def write_issue(issue):
+    '''Takes an issue or PR and returns summary as string.'''
+    if issue.pull_request:
+        return f'* {issue.title} [\#{issue.number}]({issue.html_url}) ([{issue.user.login}]({issue.user.html_url}))\n'
+    else:
+        return f'* {issue.title} [\#{issue.number}]({issue.html_url})\n'
+
+def get_labels(issue):
+    '''Yields all labels of an issue.'''
+    for label in issue.labels:
+        yield label.name
+
+def export_file(issues):
+    '''Categorizes a list of issues and writes the structure into a markdown file'''
+
+    features = []
+    enhancements = []
+    bugs = []
+    other = []
+
+    for issue in issues:
+        #TODO: use config variables for categories
+        is_other = True
+        for label in get_labels(issue):
+            if label in ['new feature', 'user story']:
+                features.append(issue)
+                is_other = False
+                break
+            elif label in ['enhancement']:
+                enhancements.append(issue)
+                is_other = False
+                break
+            elif label in ['bug', 'bug (critical)', 'correction']:
+                bugs.append(issue)
+                is_other = False
+                break
+        if is_other:
+            other.append(issue)
+
+    with open('PYCHANGELOG.md', 'w') as f:
+        f.write('# Changelog\n')
+        if features:
+            f.write('\n**New features:**\n')
+            for issue in features:
+                f.write(write_issue(issue))
+        if enhancements:
+            f.write('\n**Enhancements:**\n')
+            for issue in enhancements:
+                f.write(write_issue(issue))
+        if bugs:
+            f.write('\n**Fixed bugs:**\n')
+            for issue in bugs:
+                f.write(write_issue(issue))
+        f.write('\n**Other changes:**\n')
+        for issue in other:
+            f.write(write_issue(issue))
 
 if __name__ == '__main__':
     generate_change_logs()
