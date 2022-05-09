@@ -4,13 +4,14 @@ import click
 import configparser
 from github import Github
 from datetime import timedelta
+import re
 
 # Read config
 config = configparser.ConfigParser()
 config.read('config.ini')
 
 @click.command()
-@click.option('--token', help='Github Token.', )
+@click.option('--token', help='Github Token.',)
 def generate_change_logs(token):
     """."""
     
@@ -25,43 +26,47 @@ def generate_change_logs(token):
     from_date = latest_release.commit.commit.committer.date
     to_date = new_release.commit.commit.committer.date
     
-    all_closed_issues = repo.get_issues(state='closed', sort='updated')
     click.secho('Fetching all closed issues and PRs...')
+    all_closed_issues = get_all(repo.get_issues(state='closed', sort='updated'))
 
     issues = []
-    click.secho(f'Filtering issues closed between {from_date.strftime("%d-%m-%Y")} to {to_date.strftime("%d-%m-%Y")}...')
-    for issue in get_all(all_closed_issues):
-        if issue.closed_at > from_date + timedelta(minutes=1) and issue.closed_at <= to_date + timedelta(minutes=1):
-            issues.append(issue)
-        else :
-            continue
+
+    with click.progressbar(all_closed_issues, label=f'Filtering issues closed between {from_date.strftime("%d-%m-%Y")} to {to_date.strftime("%d-%m-%Y")}...') as bar:
+        for issue in bar:
+            if issue.closed_at > from_date + timedelta(minutes=1) and issue.closed_at <= to_date + timedelta(minutes=1):
+                issues.append(issue)
 
     out_issues = []
     out_prs = []
 
-    for issue in issues:
-        if issue.pull_request:
-            pr = repo.get_pull(issue.number)
-            if pr.merged and (pr.base.label == config['conf']['user'] + ':' + config['conf']['new_release_branch']):
-                out_prs.append(issue)
-        else:
-            ignore_issue = 0
-            for label in issue.labels:
-                if label.name in ignore_labels:
-                    ignore_issue = 1
-                    break
-                else:
-                    ignore_issue = 0
-            if ignore_issue == 0:
-                out_issues.append(issue)
+    with click.progressbar(issues, label=f'Separating issues and PRs') as bar:
+        for issue in bar:
+            if issue.pull_request:
+                pr = repo.get_pull(issue.number)
+                if pr.merged and (pr.base.label == config['conf']['user'] + ':' + config['conf']['new_release_branch']):
+                    out_prs.append(issue)
+            else:
+                ignore_issue = 0
+                for label in issue.labels:
+                    if label.name in ignore_labels:
+                        ignore_issue = 1
+                        break
+                    else:
+                        ignore_issue = 0
+                if ignore_issue == 0:
+                    out_issues.append(issue)
 
 # Filter pull requests that are linked to issues by comparing their closed_at date
     final_prs = []
     for pr in out_prs:
         linked_pr = False
         for issue in out_issues:
-            if issue.closed_at == pr.closed_at:
-                click.secho(f'PR {pr.number} closed with issue {issue.number}. Ignoring.', fg='yellow')
+
+            regex = r"([cC]lose.?.|[fF]ix.?.|[rR]esolve.).*" + re.escape(str(issue.number))
+            match = re.search(regex, pr.body)
+
+            if match :
+                click.secho(f'PR {pr.number}: \'{pr.title}\' closed with issue {issue.number}: \'{issue.title}\'. Ignoring.', fg='yellow')
                 linked_pr = True
                 break
         if not linked_pr:
@@ -90,11 +95,12 @@ def write_issue(issue):
 
 def get_labels(issue):
     '''Yields all labels of an issue.'''
+
     for label in issue.labels:
         yield label.name
 
 def export_file(issues):
-    '''Categorizes a list of issues and writes the structure into a markdown file'''
+    '''Categorizes a list of issues and outputs the structure into a markdown file'''
 
     features = []
     enhancements = []
@@ -131,7 +137,7 @@ def export_file(issues):
             for issue in enhancements:
                 f.write(write_issue(issue))
         if bugs:
-            f.write('\n**Fixed bugs:**\n')
+            f.write('\n**Fixes:**\n')
             for issue in bugs:
                 f.write(write_issue(issue))
         f.write('\n**Other changes:**\n')
