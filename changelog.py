@@ -23,8 +23,16 @@ def generate_change_logs(token):
     g = Github(token)
     repo = g.get_repo(repo_slug)
     merging_branch = repo.get_branch(conf['merging_branch'])
-    from_date = get_tag_date(conf['from_tag'], repo)
-    to_date = get_tag_date(conf['to_tag'], repo)
+
+    if get_tag_date(conf['from_tag'], repo):
+        from_date = get_tag_date(conf['from_tag'], repo)
+    else:
+        from_date = datetime.min
+
+    if get_tag_date(conf['to_tag'], repo):
+        to_date = get_tag_date(conf['to_tag'], repo)
+    else:
+        to_date = datetime.now()
 
     # Get all closed issues and PRs
     click.secho('Fetching all closed issues and PRs...')
@@ -99,7 +107,7 @@ def get_tag_date(tag_name, repo):
         if tag.name == tag_name:
             return tag.commit.commit.committer.date
         else:
-            return datetime.now()
+            return None
 
 def write_issue(issue):
     '''Takes an issue or PR and returns summary as string.'''
