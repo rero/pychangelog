@@ -35,7 +35,7 @@ def generate_change_logs(token):
         to_date = datetime.now()
 
     # Get all closed issues and PRs
-    click.secho('Fetching all closed issues and PRs...')
+    click.secho('Fetching all closed issues and PRs...', fg='cyan')
     all_closed_issues = get_all(repo.get_issues(state='closed', sort='updated'))
 
     # Get only issues closed in the selected timeframe
@@ -44,6 +44,7 @@ def generate_change_logs(token):
         for issue in bar:
             if issue.closed_at > from_date + timedelta(minutes=1) and issue.closed_at <= to_date + timedelta(minutes=1):
                 issues.append(issue)
+    click.secho(f'Found {len(issues)} changes.', fg='green')
 
 
 # Separate issues and PRs in two distinct lists. Filter issues by
@@ -51,7 +52,7 @@ def generate_change_logs(token):
     out_issues = []
     out_prs = []
 
-    with click.progressbar(issues, label=f'Separating issues and PRs') as bar:
+    with click.progressbar(issues, label=f'Separating and filtering issues and PRs...') as bar:
         for issue in bar:
             if issue.pull_request:
                 pr = repo.get_pull(issue.number)
@@ -68,8 +69,12 @@ def generate_change_logs(token):
                 if ignore_issue == 0:
                     out_issues.append(issue)
 
+    click.secho(f'{len(out_issues)} remaining issues.', fg='green')
+    click.secho(f'{len(out_prs)} remaining pull requests.', fg='green')
+
 # Filter pull requests that are linked to issues by looking in the PR
 # body for an issue-closing keyword and the issue number
+    click.secho(f'Filtering pull requests linked to issues...', fg='cyan')
     final_prs = []
     for pr in out_prs:
         linked_pr = False
@@ -79,13 +84,16 @@ def generate_change_logs(token):
             match = re.search(regex, pr.body)
 
             if match :
-                click.secho(f'PR {pr.number}: \'{pr.title}\' closed with issue {issue.number}: \'{issue.title}\'. Ignoring.', fg='yellow')
+                click.secho(f'Ignoring PR {pr.number}: \'{pr.title}\': closed with issue {issue.number}: \'{issue.title}\'', fg='yellow')
                 linked_pr = True
                 break
         if not linked_pr:
             final_prs.append(pr)
 
     final_issues = final_prs + out_issues
+
+    click.secho(f'{len(final_issues)} remaining changes.', fg='green')
+    click.secho(f'Structured changelog exported to `PYCHANGELOG.md`!', fg='cyan', bold=True)
 
     export_file(final_issues, conf['from_tag'], conf['to_tag'], repo_slug)
 
