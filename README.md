@@ -31,7 +31,7 @@ the same change isn't listed twice.
 
 ### Install
 
-1. Clone this repo : `git clone https://github.com/PascalRepond/pychangelog.git`.
+1. Clone this repo : `git clone https://github.com/rero/pychangelog.git`.
 2. Run `poetry install` to install dependencies.
 
 ## Usage
