@@ -81,7 +81,7 @@ def generate_change_logs(token):
         for issue in out_issues:
 
             regex = r"([cC]lose.?.|[fF]ix.?.|[rR]esolve.).*" + re.escape(str(issue.number))
-            match = re.search(regex, pr.body)
+            match = re.search(regex, str(pr.body))
 
             if match :
                 click.secho(f'Ignoring PR {pr.number}: \'{pr.title}\': closed with issue {issue.number}: \'{issue.title}\'', fg='yellow')
