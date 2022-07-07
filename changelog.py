@@ -114,8 +114,6 @@ def get_tag_date(tag_name, repo):
     for tag in get_all(repo.get_tags()):
         if tag.name == tag_name:
             return tag.commit.commit.committer.date
-        else:
-            return None
 
 def write_issue(issue):
     '''Takes an issue or PR and returns summary as string.'''
