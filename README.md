@@ -45,7 +45,7 @@ the same change isn't listed twice.
 will compare changes between `from_tag` and today.
    1. `merging_branch`: Only PRs merged to this branch will be used for the
    changelog
-2. Run `poetry run ./changelog.py --token <your-github-token>`
+2. Run `poetry run ./pychangelog.py --token <your-github-token>`
 3. Check `PYCHANGELOG.md` for your changelog
 
 ## Roadmap

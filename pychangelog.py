@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-import click
 import configparser
-from github import Github
-from datetime import datetime, timedelta
 import re
+from datetime import datetime, timedelta
+
+import click
+from github import Github
 
 # Read and parse config
 config = configparser.ConfigParser()
@@ -88,7 +89,7 @@ def generate_change_logs(token):
             regex = (
                 f"([cC]lose.?.|[fF]ix.?.|[rR]esolve.).*{re.escape(str(issue.number))}"
             )
-            if match := re.search(regex, str(pr.body)):
+            if re.search(regex, str(pr.body)):
                 click.secho(
                     f"Ignoring PR {pr.number}: '{pr.title}': closed with issue {issue.number}: '{issue.title}'",
                     fg="yellow",
@@ -122,6 +123,7 @@ def get_tag_date(tag_name, repo):
     for tag in get_all(repo.get_tags()):
         if tag.name == tag_name:
             return tag.commit.commit.committer.date
+
 
 def write_issue(issue):
     """Takes an issue or PR and returns summary as string."""
