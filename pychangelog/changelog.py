@@ -2,7 +2,7 @@
 
 import configparser
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import click
 from github import Github
@@ -28,8 +28,8 @@ def generate_change_logs(token):
     repo = g.get_repo(repo_slug)
     merging_branch = repo.get_branch(conf["merging_branch"])
 
-    from_date = get_tag_date(conf["from_tag"], repo) or datetime.min
-    to_date = get_tag_date(conf["to_tag"], repo) or datetime.now()
+    from_date = get_tag_date(conf["from_tag"], repo) or datetime.min(timezone.utc)
+    to_date = get_tag_date(conf["to_tag"], repo) or datetime.now(timezone.utc)
 
     # Get all closed issues and PRs
     click.secho("Fetching closed issues and PRs...", fg="cyan")
@@ -47,6 +47,8 @@ def generate_change_logs(token):
         closed_issues,
         label="Filtering issues by close date...",
     ) as bar:
+        # for issue in bar:
+        #     print(issue.closed_at.tzinfo)
         issues.extend(
             issue
             for issue in bar

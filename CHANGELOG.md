@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.0.0](https://github.com/rero/pychangelog/tree/v1.0.0) (2025-07-23)
+
+[Full Changelog](https://github.com/rero/pychangelog/compare/v0.2.0...v1.0.0)
+
+**Changes:**
+
+**!BREAKING:** The strcuture of the project files has changed, as well as the install
+method and the command.
+
+- chore: add uv and ruff [\#7](https://github.com/rero/pychangelog/pull/7) (by @PascalRepond)
+
 ## [v0.2.0](https://github.com/rero/pychangelog/tree/v0.2.0) (2025-05-01)
 
 [Full Changelog](https://github.com/rero/pychangelog/compare/v0.1.0...v0.2.0)
