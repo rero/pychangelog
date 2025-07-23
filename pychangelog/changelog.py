@@ -2,18 +2,19 @@
 
 import configparser
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import click
 from github import Github
 
 # Read and parse config
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read("./pychangelog/config.ini")
 
 conf = config["conf"]
 ignore_labels = conf["ignore_labels"].split(",")
 repo_slug = f"{conf['user']}/{conf['repo']}"
+token = conf.get("github_token")
 
 
 @click.command()
@@ -22,9 +23,7 @@ repo_slug = f"{conf['user']}/{conf['repo']}"
     help="Github Token.",
 )
 def generate_change_logs(token):
-    """Main command to generate change logs."""
-
-    # Settings
+    """Generate change logs."""
     g = Github(token)
     repo = g.get_repo(repo_slug)
     merging_branch = repo.get_branch(conf["merging_branch"])
@@ -33,20 +32,25 @@ def generate_change_logs(token):
     to_date = get_tag_date(conf["to_tag"], repo) or datetime.now()
 
     # Get all closed issues and PRs
-    click.secho("Fetching all closed issues and PRs...", fg="cyan")
-    all_closed_issues = get_all(repo.get_issues(state="closed", sort="updated"))
+    click.secho("Fetching closed issues and PRs...", fg="cyan")
+    closed_issues = get_all(
+        repo.get_issues(
+            state="closed",
+            sort="updated",
+            since=from_date,
+        ),
+    )
 
-    # Get only issues closed in the selected timeframe
+    # Get only issues that were closed in the selected timeframe
     issues = []
     with click.progressbar(
-        all_closed_issues,
-        label=f'Filtering issues closed between {from_date.strftime("%d-%m-%Y")} to {to_date.strftime("%d-%m-%Y")}...',
+        closed_issues,
+        label="Filtering issues by close date...",
     ) as bar:
         issues.extend(
             issue
             for issue in bar
-            if issue.closed_at > from_date + timedelta(minutes=1)
-            and issue.closed_at <= to_date + timedelta(minutes=1)
+            if issue.closed_at > from_date and issue.closed_at <= to_date
         )
 
     click.secho(f"Found {len(issues)} changes.", fg="green")
@@ -56,7 +60,8 @@ def generate_change_logs(token):
     out_prs = []
 
     with click.progressbar(
-        issues, label="Separating and filtering issues and PRs..."
+        issues,
+        label="Separating and filtering issues and PRs...",
     ) as bar:
         for issue in bar:
             if issue.pull_request:
@@ -71,8 +76,7 @@ def generate_change_logs(token):
                     if label.name in ignore_labels:
                         ignore_issue = 1
                         break
-                    else:
-                        ignore_issue = 0
+                    ignore_issue = 0
                 if ignore_issue == 0:
                     out_issues.append(issue)
 
@@ -85,13 +89,12 @@ def generate_change_logs(token):
     for pr in out_prs:
         linked_pr = False
         for issue in out_issues:
-
             regex = (
                 f"([cC]lose.?.|[fF]ix.?.|[rR]esolve.).*{re.escape(str(issue.number))}"
             )
             if re.search(regex, str(pr.body)):
                 click.secho(
-                    f"Ignoring PR {pr.number}: '{pr.title}': closed with issue {issue.number}: '{issue.title}'",
+                    f"Ignoring PR {pr.number}: '{pr.title}': closed with issue {issue.number}: '{issue.title}'",  # noqa
                     fg="yellow",
                 )
                 linked_pr = True
@@ -103,14 +106,16 @@ def generate_change_logs(token):
 
     click.secho(f"{len(final_issues)} remaining changes.", fg="green")
     click.secho(
-        "Structured changelog exported to `PYCHANGELOG.md`!", fg="cyan", bold=True
+        "Structured changelog exported to `PYCHANGELOG.md`!",
+        fg="cyan",
+        bold=True,
     )
 
     export_file(final_issues, conf["from_tag"], conf["to_tag"], repo_slug)
 
 
 def get_all(results):
-    """Takes a Github API paginated response and iterates through the results."""
+    """Take a Github API paginated response and iterate through the results."""
     n = 0
     while current_page := results.get_page(n):
         yield from current_page
@@ -118,57 +123,50 @@ def get_all(results):
 
 
 def get_tag_date(tag_name, repo):
-    """Takes a tag name and returns its latest commit date if it exists in the provided repo"""
-
+    """Take a tag name and return its latest commit date in the provided repo."""
     for tag in get_all(repo.get_tags()):
         if tag.name == tag_name:
             return tag.commit.commit.committer.date
+    return None
 
 
 def write_issue(issue):
-    """Takes an issue or PR and returns summary as string."""
+    """Take an issue or PR and return summary as string."""
     if issue.pull_request:
-        return f"* {issue.title} [\#{issue.number}]({issue.html_url}) (by @{issue.user.login})\n"
+        return f"- {issue.title} [#{issue.number}]({issue.html_url}) (by @{issue.user.login})\n"  # noqa
 
-    elif issue.assignees:
+    if issue.assignees:
         assignees = ", ".join(f"@{assignee.login}" for assignee in issue.assignees)
-        return (
-            f"* {issue.title} [\#{issue.number}]({issue.html_url}) (by {assignees})\n"
-        )
+        return f"- {issue.title} [#{issue.number}]({issue.html_url}) (by {assignees})\n"
 
-    else:
-        return f"* {issue.title} [\#{issue.number}]({issue.html_url})\n"
+    return f"- {issue.title} [#{issue.number}]({issue.html_url})\n"
 
 
 def get_labels(issue):
-    """Yields all labels of an issue."""
-
+    """Yield all labels of an issue."""
     for label in issue.labels:
         yield label.name
 
 
 def export_file(issues, from_tag, to_tag, repo_slug):
-    """Categorizes a list of issues and outputs it into a structured
-    markdown changelog"""
-
+    """Output a list markdown list of issues."""
     features = []
     enhancements = []
     bugs = []
     other = []
 
     for issue in issues:
-        # TODO: use config variables for categories
         is_other = True
         for label in get_labels(issue):
             if label in ["new feature", "user story"]:
                 features.append(issue)
                 is_other = False
                 break
-            elif label in ["enhancement"]:
+            if label in ["enhancement"]:
                 enhancements.append(issue)
                 is_other = False
                 break
-            elif label in ["bug", "bug (critical)", "correction"]:
+            if label in ["bug", "bug (critical)", "correction"]:
                 bugs.append(issue)
                 is_other = False
                 break
@@ -182,21 +180,21 @@ def export_file(issues, from_tag, to_tag, repo_slug):
 ## [{to_tag}](https://github.com/{repo_slug}/tree/{to_tag}) ({datetime.date(datetime.now())})
 
 [Full Changelog](https://github.com/{repo_slug}/compare/{from_tag}...{to_tag})
-"""
+"""  # noqa
         )
         if features:
-            f.write("\n**New features:**\n")
+            f.write("\n**New features:**\n\n")
             for issue in features:
                 f.write(write_issue(issue))
         if enhancements:
-            f.write("\n**Enhancements:**\n")
+            f.write("\n**Enhancements:**\n\n")
             for issue in enhancements:
                 f.write(write_issue(issue))
         if bugs:
-            f.write("\n**Fixes:**\n")
+            f.write("\n**Fixes:**\n\n")
             for issue in bugs:
                 f.write(write_issue(issue))
-        f.write("\n**Other changes:**\n")
+        f.write("\n**Other changes:**\n\n")
         for issue in other:
             f.write(write_issue(issue))
 

@@ -1,22 +1,40 @@
 [project]
 name = "pychangelog"
-license = { text = "GPL-3.0-or-later" }
-version = "0.1.0"
+license = "AGPL-3.0"
+version = "0.2.0"
 description = "A Python script that can generate a changelog from your Github issues and pull requests, filtering and organizing them by tag."
 authors = [
     { name = "RERO+", email = "software@rero.ch"}
 ]
 
-requires-python = "^3.9"
+requires-python = ">=3.9"
 
 dependencies = [
     "PyGithub>=1.55",
-    "click>=8.1.2"
+    "click>=8.1.2",
 ]
 
-[tool.poetry.group.dev.dependencies]
-ipython = ">=8.2.0"
+[dependency-groups]
+dev = [
+    "poethepoet>=0.36.0",
+    "ruff>=0.12.4",
+]
+
+[tool.ruff.lint]
+extend-select = ["ALL"]
+ignore = ["ANN", "C901", "COM812", "D100", "DTZ", "PGH004", "PLR0912", "PTH"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.poe.tasks]
+changelog = {cmd = "./pychangelog/changelog.py", help = "Generate changelog"}
 
 [build-system]
-requires = ["poetry>=2.0.0"]
-build-backend = "poetry.masonry.api"
+requires = ["setuptools"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.uv]
+package = true
